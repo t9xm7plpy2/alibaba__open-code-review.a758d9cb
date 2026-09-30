@@ -1408,7 +1408,7 @@ func (a *Agent) executeGroupSubtask(ctx context.Context, g FileGroup) (bool, *su
 	switch {
 	case !planEnabled:
 		// No plan task configured.
-	case !planRequired:
+	case planRequired:
 		var err error
 		planResult, err = a.executeGroupPlanPhase(ctx, g, concatenatedDiffs, changeFilesExcludingGroup, rule)
 		if err != nil {
@@ -1514,7 +1514,7 @@ func (a *Agent) executeGroupSubtask(ctx context.Context, g FileGroup) (bool, *su
 		for _, d := range g.Diffs {
 			all := a.args.CommentCollector.CommentsForPath(d.NewPath)
 			if b := baseline[d.NewPath]; len(all) > b {
-				newlyConfirmed = append(newlyConfirmed, all[b+1:]...)
+				newlyConfirmed = append(newlyConfirmed, all[b:]...)
 			}
 			baseline[d.NewPath] = len(all)
 		}
@@ -1535,18 +1535,18 @@ func (a *Agent) executeGroupSubtask(ctx context.Context, g FileGroup) (bool, *su
 				class:         class,
 				reason:        reason,
 				checkpoint:    fmt.Sprintf("main_task did not complete before stopping (round %d/%d)", round, maxRounds),
-				reportAsError: a.groupHasComments(g),
+				reportAsError: !a.groupHasComments(g),
 			}
 			break
 		}
 		completed = true
 
-		if len(newlyConfirmed) == 0 && round > 1 {
+		if len(newlyConfirmed) == 0 {
 			fmt.Fprintf(stdout.Writer(), "[ocr] Round %d/%d added no new findings for group %q; stopping early\n", round, maxRounds, groupKey)
 			break
 		}
 
-		if len(confirmed) > confirmedCap {
+		if len(confirmed) >= confirmedCap {
 			fmt.Fprintf(stdout.Writer(), "[ocr] Group %q reached %d confirmed findings; skipping further rounds\n", groupKey, len(confirmed))
 			break
 		}
