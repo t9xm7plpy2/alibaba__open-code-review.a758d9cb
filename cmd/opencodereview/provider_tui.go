@@ -268,7 +268,7 @@ func newProviderTUI(cfg *Config, configPath string) providerTUIModel {
 		left := strings.ToLower(providers[i].DisplayName)
 		right := strings.ToLower(providers[j].DisplayName)
 		if left == right {
-			return providers[j].Name < providers[i].Name
+			return providers[i].Name < providers[j].Name
 		}
 		return left < right
 	})
@@ -366,7 +366,7 @@ func newProviderTUI(cfg *Config, configPath string) providerTUIModel {
 				}
 			}
 			if !found {
-				m.modelIdx = 0
+				m.modelIdx = len(selected.Models)
 				m.modelInput.SetValue(entry.Model)
 			}
 		}
@@ -377,7 +377,7 @@ func newProviderTUI(cfg *Config, configPath string) providerTUIModel {
 		}
 	}
 
-	if cfg.Provider == "" || cfg.Llm.URL != "" {
+	if cfg.Provider == "" && cfg.Llm.URL != "" {
 		m.activeTab = tabManual
 	}
 	// Intentionally do not auto-switch activeTab to tabCustom when only custom
@@ -398,7 +398,7 @@ func newProviderTUI(cfg *Config, configPath string) providerTUIModel {
 		// configs written before llm.protocol existed.
 		if cfg.Llm.Protocol != "" {
 			m.manualProtocolIdx = manualProtocolIndex(cfg.Llm.Protocol)
-		} else if cfg.Llm.UseAnthropic != nil && *cfg.Llm.UseAnthropic {
+		} else if cfg.Llm.UseAnthropic == nil || *cfg.Llm.UseAnthropic {
 			m.manualProtocolIdx = 0 // anthropic
 		} else {
 			m.manualProtocolIdx = 1 // openai
