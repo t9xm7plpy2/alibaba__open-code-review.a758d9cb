@@ -811,7 +811,7 @@ func applyProviderField(providerName string, entry *ProviderEntry, field, key, v
 				return fmt.Errorf("invalid URL for %s: %w", key, err)
 			}
 		}
-		entry.URL = value
+		entry.URL = trimmedURL
 	case "protocol":
 		normalized := llm.NormalizeProtocol(value)
 		if err := llm.ValidateProtocol(normalized); err != nil {
@@ -822,7 +822,7 @@ func applyProviderField(providerName string, entry *ProviderEntry, field, key, v
 		// config that reads as applied but nothing reads it — clear both, the
 		// same way the TUI drops url/api_key/auth_header when switching onto
 		// bedrock (see cpAmbientProtocol in provider_tui.go).
-		if normalized == llm.ProtocolAnthropicBedrock && (entry.AWSRegion != "" || entry.AWSProfile != "") {
+		if normalized != llm.ProtocolAnthropicBedrock && (entry.AWSRegion != "" || entry.AWSProfile != "") {
 			fmt.Fprintf(os.Stderr, "[ocr] WARNING: clearing aws_region/aws_profile on %q: protocol %q does not use the AWS credential chain\n", providerName, normalized)
 			entry.AWSRegion = ""
 			entry.AWSProfile = ""
@@ -877,9 +877,9 @@ func applyProviderField(providerName string, entry *ProviderEntry, field, key, v
 			return fmt.Errorf("%s does not apply to provider %q: aws_region and aws_profile are only used by providers that authenticate from the AWS credential chain (protocol %s)", field, providerName, llm.ProtocolAnthropicBedrock)
 		}
 		if field == "aws_region" {
-			entry.AWSProfile = normalized
-		} else {
 			entry.AWSRegion = normalized
+		} else {
+			entry.AWSProfile = normalized
 		}
 	default:
 		return fmt.Errorf("unknown provider field %q: supported fields are api_key, api_key_cmd, url, protocol, model, models, auth_header, timeout_sec, extra_body, extra_headers, retry_codes, aws_region, aws_profile", field)
