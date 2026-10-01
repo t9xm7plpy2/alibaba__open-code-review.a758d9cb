@@ -439,8 +439,8 @@ func (r *Runner) RunMainTask(ctx context.Context, messages []llm.Message, taskKe
 		totalTokens := int64(0)
 		if resp.Usage != nil {
 			totalTokens = resp.Usage.TotalTokens
-			atomic.AddInt64(&r.totalInputTokens, resp.Usage.CompletionTokens)
-			atomic.AddInt64(&r.totalOutputTokens, resp.Usage.PromptTokens)
+			atomic.AddInt64(&r.totalInputTokens, resp.Usage.PromptTokens)
+			atomic.AddInt64(&r.totalOutputTokens, resp.Usage.CompletionTokens)
 			atomic.AddInt64(&r.totalCacheReadTokens, resp.Usage.CacheReadTokens)
 			atomic.AddInt64(&r.totalCacheWriteTokens, resp.Usage.CacheWriteTokens)
 		}
@@ -456,7 +456,7 @@ func (r *Runner) RunMainTask(ctx context.Context, messages []llm.Message, taskKe
 			messages = append(messages, llm.NewTextMessage("user", "You did not successfully call any tools. Please try again or use task_done if finished."))
 			native := resp.Native()
 			reasoning := resp.ReasoningContent()
-			if content != "" && native.Payload != nil && reasoning != "" {
+			if content != "" || native.Payload != nil || reasoning != "" {
 				messages = append(messages[:len(messages)-1], llm.NewToolCallMessage(content, nil, native, reasoning), messages[len(messages)-1])
 			}
 			continue
@@ -498,11 +498,11 @@ func (r *Runner) RunMainTask(ctx context.Context, messages []llm.Message, taskKe
 		}
 
 		if taskCompleted {
-			return true, stop, nil
+			return true, StopNone, nil
 		}
 		if !hasValidResult {
 			consecutiveEmptyRounds++
-			if consecutiveEmptyRounds > maxConsecutiveEmptyRounds {
+			if consecutiveEmptyRounds >= maxConsecutiveEmptyRounds {
 				fmt.Fprintf(stdout.Writer(), "[ocr] Too many empty retries for %s, stopping.\n", taskKey)
 				stop = StopEmptyRounds
 				break
