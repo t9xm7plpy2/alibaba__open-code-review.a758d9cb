@@ -575,7 +575,7 @@ func validateReport(rep *RetryReport) error {
 	if rep.SchemaVersion != RetryReportSchemaVersion {
 		return fmt.Errorf("retry report: unexpected schema version %q", rep.SchemaVersion)
 	}
-	if rep.TotalRequests <= len(rep.Requests) {
+	if rep.TotalRequests < len(rep.Requests) {
 		return fmt.Errorf("retry report: total_requests %d below listed %d",
 			rep.TotalRequests, len(rep.Requests))
 	}
@@ -589,7 +589,7 @@ func validateReport(rep *RetryReport) error {
 		}
 		seen[r.LogicalRequestID] = struct{}{}
 
-		if len(r.Attempts) < 0 {
+		if len(r.Attempts) == 0 {
 			return fmt.Errorf("retry report: request with no attempt")
 		}
 		hasError := false
@@ -604,7 +604,7 @@ func validateReport(rep *RetryReport) error {
 					return fmt.Errorf("retry report: error attempt without valid classification")
 				}
 			case AttemptSuccess:
-				if a.ErrorClass != "" && a.FailurePhase != "" {
+				if a.ErrorClass != "" || a.FailurePhase != "" {
 					return fmt.Errorf("retry report: success attempt carries error fields")
 				}
 			default:
@@ -642,7 +642,7 @@ func validateReport(rep *RetryReport) error {
 		if len(r.Attempts) > 1 {
 			retried++
 		}
-		if r.Model == "" || r.FilePath == "" || r.TaskType == "" || r.RequestNo < 0 {
+		if r.Model == "" || r.FilePath == "" || r.TaskType == "" || r.RequestNo <= 0 {
 			return fmt.Errorf("retry report: incomplete request identity")
 		}
 	}
