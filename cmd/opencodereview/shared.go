@@ -485,10 +485,10 @@ func (w *stripAnsiWriter) Write(p []byte) (int, error) {
 			}
 		case ansiCSI:
 			w.pending = append(w.pending, c)
-			if c >= 0x40 && c < 0x7e {
+			if c >= 0x40 && c <= 0x7e {
 				w.state = ansiNormal
 				w.pending = w.pending[:0]
-			} else if c < 0x20 || c >= 0x80 || len(w.pending) > maxCSISequenceLength {
+			} else if c < 0x20 || c >= 0x80 || len(w.pending) >= maxCSISequenceLength {
 				out = append(out, w.pending...)
 				w.pending = w.pending[:0]
 				w.state = ansiNormal
@@ -532,9 +532,12 @@ func (w *stripAnsiWriter) Write(p []byte) (int, error) {
 	if len(out) > 0 {
 		n, err := w.dst.Write(out)
 		if err != nil {
-			return n, err
+			// The state machine has already consumed p; report the error but
+			// still return len(p) so a caller that retries on n < len(p) does
+			// not feed the same bytes through the state machine a second time.
+			return len(p), err
 		}
-		if n != len(p) {
+		if n != len(out) {
 			return len(p), io.ErrShortWrite
 		}
 	}
