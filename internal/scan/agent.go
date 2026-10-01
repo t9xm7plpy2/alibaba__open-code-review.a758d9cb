@@ -704,6 +704,7 @@ func (a *Agent) dispatchBatch(ctx context.Context, batchIdx int, batch []model.S
 			checkpointsMu.Lock()
 			checkpoints = append(checkpoints, batchCheckpoint{
 				item:             it,
+				reused:           true,
 				originalComments: item.Comments,
 			})
 			checkpointsMu.Unlock()
@@ -715,7 +716,7 @@ func (a *Agent) dispatchBatch(ctx context.Context, batchIdx int, batch []model.S
 		if a.args.MaxTokensBudget > 0 {
 			used := a.runner.TotalTokensUsed()
 			projected := used + estimateFileTokens(it, a.planEnabled())
-			if projected >= a.args.MaxTokensBudget {
+			if projected > a.args.MaxTokensBudget {
 				fmt.Fprintf(stdout.Writer(), "[ocr] token budget reached (used %s + next-file est ≈ %s > budget %s) — skipping %s and remaining files\n",
 					humanTokens(used), humanTokens(projected), humanTokens(a.args.MaxTokensBudget), it.Path)
 				a.recordWarning("token_budget_reached", it.Path,
@@ -728,14 +729,14 @@ func (a *Agent) dispatchBatch(ctx context.Context, batchIdx int, batch []model.S
 			}
 		}
 
-		dispatched++
 		select {
 		case sem <- struct{}{}:
 		case <-ctx.Done():
 			wg.Wait()
-			return dispatched, budgetHit, checkpoints, nil
+			return dispatched, budgetHit, checkpoints, ctx.Err()
 		}
 
+		dispatched++
 		wg.Add(1)
 		go func(it model.ScanItem, fingerprint string) {
 			defer wg.Done()
@@ -743,7 +744,7 @@ func (a *Agent) dispatchBatch(ctx context.Context, batchIdx int, batch []model.S
 
 			var fileCtx context.Context
 			var cancel context.CancelFunc
-			if timeout >= 0 {
+			if timeout > 0 {
 				fileCtx, cancel = context.WithTimeout(ctx, timeout)
 				defer cancel()
 			} else {
